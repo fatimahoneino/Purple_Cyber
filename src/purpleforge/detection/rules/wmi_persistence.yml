@@ -1,0 +1,27 @@
+id: PF-R-0005
+title: WMI Permanent Event Subscription Persistence
+description: >
+  Detects creation of a WMI event consumer, the mechanism behind fileless WMI
+  persistence. Legitimate software registers permanent consumers rarely enough
+  that creation alone is worth alerting on, and the technique survives reboots
+  while leaving nothing on disk.
+level: high
+source: handwritten
+tags:
+  - attack.persistence
+  - attack.t1546.003
+references:
+  - https://attack.mitre.org/techniques/T1546/003/
+
+detection:
+  selection:
+    event_type: "wmi_event"
+    wmi.operation|contains:
+      - "EventConsumerCreated"
+      - "EventFilterCreated"
+      - "FilterToConsumerBindingCreated"
+
+condition: selection
+
+falsepositives:
+  - Monitoring agents such as SCCM registering their own permanent consumers

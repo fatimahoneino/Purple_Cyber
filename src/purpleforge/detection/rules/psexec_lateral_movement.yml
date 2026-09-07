@@ -1,0 +1,31 @@
+id: PF-R-0008
+title: Remote Execution via PsExec-style Service Installation
+description: >
+  Detects PsExec and equivalents used to push execution to a remote host. Matches
+  the command-line shape (a UNC target plus credential flags) rather than the
+  binary name, since renaming PsExec is standard practice for operators.
+level: high
+source: handwritten
+tags:
+  - attack.lateral-movement
+  - attack.t1021.002
+references:
+  - https://attack.mitre.org/techniques/T1021/002/
+
+detection:
+  selection_named:
+    process.name|startswith:
+      - "psexec"
+      - "paexec"
+      - "csexec"
+  selection_cmdline_shape:
+    process.command_line|re: "\\\\\\\\[A-Za-z0-9._-]+\\s+.*-u\\s"
+  selection_admin_share:
+    event_type: "file_share_access"
+    file.share_name|contains: "ADMIN$"
+
+condition: selection_named or selection_cmdline_shape or selection_admin_share
+
+falsepositives:
+  - Help desk staff using PsExec for approved remote administration
+  - Software deployment tools writing to ADMIN$ during rollout

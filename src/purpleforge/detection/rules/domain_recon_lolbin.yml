@@ -1,0 +1,36 @@
+id: PF-R-0006
+title: Domain Reconnaissance via Built-in Utilities
+description: >
+  Detects domain enumeration through net, nltest, dsquery or similar built-ins
+  when spawned by a script interpreter. The parent-process requirement is what
+  makes this usable: administrators run these commands interactively all day, but
+  a PowerShell or wscript parent points to automated enumeration.
+level: medium
+source: handwritten
+tags:
+  - attack.discovery
+  - attack.t1087.002
+references:
+  - https://attack.mitre.org/techniques/T1087/002/
+
+detection:
+  selection_net:
+    process.name|endswith: "net.exe"
+    process.command_line|re: "(group|user)\\s+.*(/domain|domain admins)"
+  selection_tools:
+    process.name|endswith:
+      - "nltest.exe"
+      - "dsquery.exe"
+      - "adfind.exe"
+  selection_script_parent:
+    process.parent_name|endswith:
+      - "powershell.exe"
+      - "pwsh.exe"
+      - "wscript.exe"
+      - "cscript.exe"
+      - "mshta.exe"
+
+condition: (selection_net or selection_tools) and selection_script_parent
+
+falsepositives:
+  - Login scripts and inventory automation enumerating group membership

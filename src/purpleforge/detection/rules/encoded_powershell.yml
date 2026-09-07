@@ -1,0 +1,30 @@
+id: PF-R-0001
+title: Encoded PowerShell Command Execution
+description: >
+  Detects PowerShell launched with an encoded command payload combined with
+  window-hiding or non-interactive flags. Encoding alone is used by some
+  legitimate management tooling, so the rule requires a concealment flag as well
+  to keep the false-positive rate workable.
+level: high
+source: handwritten
+tags:
+  - attack.execution
+  - attack.t1059.001
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+
+detection:
+  selection_process:
+    process.name|endswith:
+      - "powershell.exe"
+      - "pwsh.exe"
+  selection_encoded:
+    process.command_line|re: "\\s-(enc|encodedcommand|e)\\s"
+  selection_conceal:
+    process.command_line|re: "\\s-(w|windowstyle)\\s+hidden|\\s-noni\\b|\\s-nop\\b"
+
+condition: selection_process and selection_encoded and selection_conceal
+
+falsepositives:
+  - Configuration management tooling that wraps encoded payloads (SCCM, Ansible)
+  - Vendor installers invoking hidden PowerShell during setup

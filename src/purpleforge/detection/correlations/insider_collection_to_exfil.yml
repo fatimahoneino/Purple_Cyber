@@ -1,0 +1,35 @@
+id: PF-C-0001
+title: Insider Data Collection Followed by Exfiltration
+description: >
+  Detects bulk data collection followed by an outbound transfer by the same user
+  inside one window. Neither stage is alarming alone: employees legitimately clone
+  repositories, query databases and use cloud storage every day. The sequence is
+  the signal, which is why no single-event rule catches this and the insider
+  scenario shows as a total coverage gap without it.
+level: high
+source: handwritten
+tags:
+  - attack.exfiltration
+  - attack.t1567.002
+references:
+  - https://attack.mitre.org/techniques/T1567/002/
+
+correlation:
+  type: sequence
+  window_seconds: 3600
+  group_by: user
+  stages:
+    - collection:
+        event_type|in:
+          - repo_clone_burst
+          - query_executed
+          - file_copy_to_removable
+    - exfiltration:
+        event_type|in:
+          - http_upload
+          - file_copy_to_removable
+        network.bytes_out|gte: 100000000
+
+falsepositives:
+  - Approved bulk data migration to a sanctioned cloud tenant
+  - Developer syncing large build artefacts after a legitimate repository sync

