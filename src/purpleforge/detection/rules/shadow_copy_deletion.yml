@@ -1,0 +1,37 @@
+id: PF-R-0003
+title: Recovery Inhibition via Shadow Copy or Backup Catalog Deletion
+description: >
+  Detects destruction of Windows recovery options -- shadow copies, the boot
+  recovery flag, or the backup catalog. This is a near-zero-false-positive
+  signal and one of the last reliable moments to interrupt ransomware before
+  encryption begins, so it is treated as critical.
+level: critical
+source: handwritten
+tags:
+  - attack.impact
+  - attack.t1490
+references:
+  - https://attack.mitre.org/techniques/T1490/
+
+# Matching notes: every pattern below tolerates the cheap obfuscations that
+# defeat a literal substring match -- inserted quote pairs (delete""shadows),
+# cmd.exe escape carets (delete^ shadows) and padded whitespace. These are free
+# for an operator to apply, so a rule that only matches the reference spelling
+# reports coverage it does not have. Verified by the evasion harness
+# (tests/test_evasion.py), which fails if this rule regresses to a literal match.
+#
+# [\s"^]* between tokens absorbs all three obfuscations at once.
+detection:
+  selection_vssadmin:
+    process.command_line|re: "v[\\s\"^]*s[\\s\"^]*s[\\s\"^]*a[\\s\"^]*d[\\s\"^]*m[\\s\"^]*i[\\s\"^]*n.{0,20}d[\\s\"^]*e[\\s\"^]*l[\\s\"^]*e[\\s\"^]*t[\\s\"^]*e.{0,10}s[\\s\"^]*h[\\s\"^]*a[\\s\"^]*d[\\s\"^]*o[\\s\"^]*w"
+  selection_wmic:
+    process.command_line|re: "s[\\s\"^]*h[\\s\"^]*a[\\s\"^]*d[\\s\"^]*o[\\s\"^]*w[\\s\"^]*c[\\s\"^]*o[\\s\"^]*p[\\s\"^]*y.{0,10}d[\\s\"^]*e[\\s\"^]*l[\\s\"^]*e[\\s\"^]*t[\\s\"^]*e"
+  selection_bcdedit:
+    process.command_line|re: "r[\\s\"^]*e[\\s\"^]*c[\\s\"^]*o[\\s\"^]*v[\\s\"^]*e[\\s\"^]*r[\\s\"^]*y[\\s\"^]*e[\\s\"^]*n[\\s\"^]*a[\\s\"^]*b[\\s\"^]*l[\\s\"^]*e[\\s\"^]*d.{0,6}n[\\s\"^]*o|b[\\s\"^]*o[\\s\"^]*o[\\s\"^]*t[\\s\"^]*s[\\s\"^]*t[\\s\"^]*a[\\s\"^]*t[\\s\"^]*u[\\s\"^]*s[\\s\"^]*p[\\s\"^]*o[\\s\"^]*l[\\s\"^]*i[\\s\"^]*c[\\s\"^]*y.{0,6}i[\\s\"^]*g[\\s\"^]*n[\\s\"^]*o[\\s\"^]*r[\\s\"^]*e"
+  selection_wbadmin:
+    process.command_line|re: "d[\\s\"^]*e[\\s\"^]*l[\\s\"^]*e[\\s\"^]*t[\\s\"^]*e.{0,10}c[\\s\"^]*a[\\s\"^]*t[\\s\"^]*a[\\s\"^]*l[\\s\"^]*o[\\s\"^]*g"
+
+condition: 1 of selection_*
+
+falsepositives:
+  - Backup software pruning its own snapshot chain on a maintenance schedule

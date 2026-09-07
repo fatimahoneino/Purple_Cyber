@@ -1,0 +1,102 @@
+scenario_id: PF-INSIDER-01
+name: Departing Insider Intellectual Property Theft
+description: >
+  A credentialed employee under notice collects and exfiltrates source code and
+  customer data. Every action uses sanctioned tooling with legitimate access, so
+  no single event is malicious on its own. This is the hardest scenario in the
+  set and it is here on purpose -- it exposes analytics that only work because
+  the attacker used an obviously suspicious binary.
+threat_actor: Malicious insider
+references:
+  - https://attack.mitre.org/tactics/TA0010/
+
+steps:
+  - step_id: collection-repo
+    technique_id: T1213.003
+    technique_name: Code Repositories
+    tactic: collection
+    description: Bulk clone of repositories outside the insider's normal scope.
+    delay_seconds: 60
+    telemetry:
+      - source: git_audit
+        event_type: repo_clone_burst
+        host: "WKS-2288"
+        user: "sneha.p"
+        git.repos_cloned: 47
+        git.total_bytes: 3221225472
+        git.baseline_repos_per_day: 2
+        time.window_seconds: 900
+        time.hour_local: 23
+
+  - step_id: collection-database
+    technique_id: T1213
+    technique_name: Data from Information Repositories
+    tactic: collection
+    description: Full customer table export via an approved BI account.
+    delay_seconds: 45
+    telemetry:
+      - source: db_audit
+        event_type: query_executed
+        host: "SRV-DB-01"
+        user: "sneha.p"
+        db.statement: "SELECT * FROM customers JOIN contracts ON customers.id = contracts.customer_id"
+        db.rows_returned: 284119
+        db.baseline_rows_per_query: 250
+        db.export_format: "csv"
+        time.hour_local: 23
+
+  - step_id: archive
+    technique_id: T1560.001
+    technique_name: Archive via Utility
+    tactic: collection
+    description: Staged data compressed into a password-protected archive.
+    delay_seconds: 30
+    telemetry:
+      - source: sysmon
+        event_type: process_creation
+        host: "WKS-2288"
+        user: "sneha.p"
+        process.name: "7z.exe"
+        process.command_line: '7z.exe a -p***** -mhe=on C:\Users\sneha.p\Documents\archive_2024.7z C:\Users\sneha.p\staging\*'
+        process.parent_name: "explorer.exe"
+        process.integrity_level: "Medium"
+
+  - step_id: exfil-cloud
+    technique_id: T1567.002
+    technique_name: Exfiltration to Cloud Storage
+    tactic: exfiltration
+    description: Archive uploaded to a personal cloud account.
+    delay_seconds: 40
+    telemetry:
+      - source: proxy
+        event_type: http_upload
+        host: "WKS-2288"
+        user: "sneha.p"
+        destination.domain: "www.dropbox.com"
+        http.method: "POST"
+        network.bytes_out: 3221225472
+        http.user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DropboxDesktop/187.4.5744"
+        auth.account_type: "personal"
+        time.hour_local: 23
+
+  - step_id: exfil-usb
+    technique_id: T1052.001
+    technique_name: Exfiltration over USB
+    tactic: exfiltration
+    description: Second copy written to removable media as a fallback.
+    delay_seconds: 25
+    telemetry:
+      - source: windows_security
+        event_type: removable_media_mount
+        host: "WKS-2288"
+        user: "sneha.p"
+        device.serial: "USB-SANDISK-4C530001120612117025"
+        device.capacity_bytes: 128849018880
+        device.first_seen: true
+      - source: edr
+        event_type: file_copy_to_removable
+        host: "WKS-2288"
+        user: "sneha.p"
+        file.path: 'E:\archive_2024.7z'
+        file.size: 3221225472
+        device.serial: "USB-SANDISK-4C530001120612117025"

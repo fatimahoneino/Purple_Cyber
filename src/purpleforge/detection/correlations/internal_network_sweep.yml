@@ -1,0 +1,34 @@
+id: PF-C-0004
+title: Internal Network Sweep from a Single Source
+description: >
+  Detects one host connecting to many distinct internal destinations in a short
+  window. Uses a distinct-count rather than a plain threshold on purpose: counting
+  raw connections cannot tell scanning apart from a misconfigured client retrying
+  one destination thousands of times. Unique destination count is what makes the
+  two separable, and only the former is reconnaissance.
+level: medium
+source: handwritten
+tags:
+  - attack.discovery
+  - attack.t1046
+references:
+  - https://attack.mitre.org/techniques/T1046/
+
+correlation:
+  # A threshold of 3 would fire on any workstation with a browser open. Real
+  # sweeps touch tens to hundreds of hosts, so the bar is set where legitimate
+  # client behaviour does not reach. Tuning this down inflates recall and
+  # destroys precision, which is the trade the scorecard is built to expose.
+  type: distinct
+  window_seconds: 600
+  group_by: host
+  threshold: 25
+  distinct_field: destination.ip
+  selection:
+    event_type|in:
+      - network_connection
+      - network_scan
+
+falsepositives:
+  - Vulnerability scanners and asset discovery tooling on an approved schedule
+  - Monitoring agents polling many endpoints for health checks

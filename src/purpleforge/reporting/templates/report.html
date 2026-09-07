@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PurpleForge Detection Assessment {{ run_id }}</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel-2: #1e222e; --border: #2b3040;
+    --text: #e6e8ee; --muted: #9aa3b8;
+    --green: #3fb950; --amber: #d29922; --red: #f85149; --purple: #a371f7; --blue: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+  h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.3px; }
+  h1 span { color: var(--purple); }
+  h2 { font-size: 18px; margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+  .card .value { font-size: 27px; font-weight: 650; margin-top: 6px; letter-spacing: -0.5px; }
+  .grade-A, .good { color: var(--green); }
+  .grade-B { color: var(--green); }
+  .grade-C, .warn { color: var(--amber); }
+  .grade-D, .grade-F, .bad { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .7px; font-weight: 600; }
+  tbody tr:hover { background: var(--panel-2); }
+  code { background: var(--panel-2); padding: 2px 6px; border-radius: 4px; font-size: 12.5px; }
+  .pill {
+    display: inline-block; padding: 2px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .4px;
+  }
+  .pill.full { background: rgba(63,185,80,.15); color: var(--green); }
+  .pill.partial { background: rgba(210,153,34,.15); color: var(--amber); }
+  .pill.none { background: rgba(248,81,73,.15); color: var(--red); }
+  .pill.critical { background: rgba(248,81,73,.2); color: var(--red); }
+  .pill.high { background: rgba(248,81,73,.13); color: #ff7b72; }
+  .pill.medium { background: rgba(210,153,34,.15); color: var(--amber); }
+  .pill.low { background: rgba(88,166,255,.13); color: var(--blue); }
+  .pill.info { background: var(--panel-2); color: var(--muted); }
+  .pill.tp { background: rgba(63,185,80,.15); color: var(--green); }
+  .pill.fp { background: rgba(248,81,73,.15); color: var(--red); }
+  .bar { height: 7px; background: var(--panel-2); border-radius: 4px; overflow: hidden; min-width: 90px; }
+  .bar > span { display: block; height: 100%; border-radius: 4px; }
+  .note {
+    background: var(--panel); border-left: 3px solid var(--purple);
+    padding: 13px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; color: var(--muted); font-size: 13.5px;
+  }
+  .note strong { color: var(--text); }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  ul.reasons { margin: 4px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+  footer { margin-top: 50px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Purple<span>Forge</span> Detection Assessment</h1>
+  <div class="sub">
+    Run <code>{{ run_id }}</code> &middot; generated {{ generated_at }} &middot;
+    AI provider <code>{{ ai_provider }}</code>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="card">
+    <div class="label">Grade</div>
+    <div class="value grade-{{ summary.grade }}">{{ summary.grade }}</div>
+  </div>
+  <div class="card">
+    <div class="label">F1 Score</div>
+    <div class="value">{{ '%.2f'|format(summary.f1_score) }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Technique Recall</div>
+    <div class="value">{{ '%.0f'|format(summary.technique_recall * 100) }}%</div>
+  </div>
+  <div class="card">
+    <div class="label">Precision</div>
+    <div class="value">{{ '%.0f'|format(summary.precision * 100) }}%</div>
+  </div>
+  <div class="card">
+    <div class="label">Techniques Covered</div>
+    <div class="value">{{ summary.techniques_detected }}<span class="sub">/{{ summary.techniques_total }}</span></div>
+  </div>
+  <div class="card">
+    <div class="label">Alerts / Real Finding</div>
+    <div class="value">{{ summary.alerts_per_true_positive }}</div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>How to read this.</strong> Recall and precision pull against each other:
+  a rule set can reach perfect recall by alerting on everything, and perfect precision
+  by alerting on almost nothing. Both are reported because either alone is trivial to
+  game. Ground truth comes from the emulation layer, which labels every synthetic event
+  with the technique that produced it, so <strong>{{ summary.true_positives }}</strong> true
+  and <strong>{{ summary.false_positives }}</strong> false positives are counted, not estimated.
+</div>
+
+<h2>Coverage by ATT&amp;CK Tactic</h2>
+<table>
+  <thead><tr><th>Tactic</th><th>Detected</th><th>Coverage</th><th style="width:200px"></th></tr></thead>
+  <tbody>
+  {% for tactic, data in by_tactic.items() %}
+    {% set pct = (data.coverage * 100) | round | int %}
+    <tr>
+      <td>{{ tactic }}</td>
+      <td class="mono">{{ data.detected }}/{{ data.total }}</td>
+      <td class="{{ 'good' if pct >= 80 else ('warn' if pct >= 40 else 'bad') }}">{{ pct }}%</td>
+      <td>
+        <div class="bar"><span style="width:{{ pct }}%; background: {{ '#3fb950' if pct >= 80 else ('#d29922' if pct >= 40 else '#f85149') }}"></span></div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Technique Detail</h2>
+<table>
+  <thead>
+    <tr><th>Technique</th><th>Name</th><th>Tactic</th><th>Status</th><th>Events</th><th>TP</th><th>Detecting Rules</th></tr>
+  </thead>
+  <tbody>
+  {% for c in coverage %}
+    <tr>
+      <td class="mono"><a href="{{ c.attack_url }}" target="_blank" rel="noopener">{{ c.technique_id }}</a></td>
+      <td>{{ c.technique_name }}</td>
+      <td class="sub">{{ c.tactic }}</td>
+      <td><span class="pill {{ c.status }}">{{ c.status }}</span></td>
+      <td class="mono">{{ c.events_generated }}</td>
+      <td class="mono">{{ c.true_positives }}</td>
+      <td class="sub mono">{{ c.detecting_rules | join(', ') or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if noisiest_rules %}
+<h2>Tuning Backlog</h2>
+<div class="note">
+  These rules fired on legitimate activity. The emulator deliberately mixes in
+  sanctioned admin work that resembles an attack &mdash; backup software deleting
+  shadow copies, SCCM adding Defender exclusions, CI agents running encoded
+  PowerShell &mdash; because a noise set that avoids the rules would report perfect
+  precision and tell you nothing.
+</div>
+<table>
+  <thead><tr><th>Rule</th><th>Title</th><th>False Positives</th><th>True Positives</th><th>FP Rate</th></tr></thead>
+  <tbody>
+  {% for r in noisiest_rules %}
+    <tr>
+      <td class="mono">{{ r.rule_id }}</td>
+      <td>{{ r.title }}</td>
+      <td class="bad mono">{{ r.fp }}</td>
+      <td class="good mono">{{ r.tp }}</td>
+      <td class="{{ 'bad' if r.fp_rate > 0.5 else 'warn' }}">{{ '%.0f'|format(r.fp_rate * 100) }}%</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if triage.triaged %}
+<h2>AI Alert Triage</h2>
+<div class="grid">
+  <div class="card"><div class="label">Alerts Triaged</div><div class="value">{{ triage.triaged }}</div></div>
+  <div class="card"><div class="label">Escalated</div><div class="value">{{ triage.escalated_count }}</div></div>
+  <div class="card">
+    <div class="label">Escalation Precision</div>
+    <div class="value {{ 'good' if triage.escalated_precision >= 0.7 else 'warn' }}">
+      {{ '%.0f'|format(triage.escalated_precision * 100) }}%
+    </div>
+  </div>
+  <div class="card">
+    <div class="label">Score Separation</div>
+    <div class="value {{ 'good' if triage.separation >= 25 else 'warn' }}">{{ triage.separation }}</div>
+  </div>
+</div>
+<div class="note">
+  <strong>Separation</strong> is the gap between the mean risk score on real detections
+  ({{ triage.mean_score_true_positive }}) and on false positives
+  ({{ triage.mean_score_false_positive }}). It is the honest measure of whether triage
+  helps: a narrow gap means the scores are not aiding prioritisation, however confident
+  the individual verdicts read.
+</div>
+{% endif %}
+
+{% if top_alerts %}
+<h2>Highest-Risk Alerts</h2>
+<table>
+  <thead><tr><th>Risk</th><th>Severity</th><th>Rule</th><th>Host</th><th>Ground Truth</th><th>Reasoning</th></tr></thead>
+  <tbody>
+  {% for a in top_alerts[:12] %}
+    <tr>
+      <td class="mono"><strong>{{ a.triage.risk_score if a.triage else '—' }}</strong></td>
+      <td><span class="pill {{ a.severity }}">{{ a.severity }}</span></td>
+      <td>{{ a.rule_title }}</td>
+      <td class="mono">{{ a.event.host }}</td>
+      <td>
+        <span class="pill {{ 'tp' if a.verdict == 'true_positive' else 'fp' }}">
+          {{ 'TP' if a.verdict == 'true_positive' else 'FP' }}
+        </span>
+      </td>
+      <td>
+        {% if a.triage and a.triage.reasoning %}
+        <ul class="reasons">
+          {% for reason in a.triage.reasoning[:3] %}<li>{{ reason }}</li>{% endfor %}
+        </ul>
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if attack_paths and attack_paths.baseline %}
+<h2>Offensive Route Simulation</h2>
+<div class="note">
+  <strong class="warn">Simulation only.</strong>
+  {{ attack_paths.safety | default('Metadata-only planning; no commands, authentication, sockets, or attack execution occur.', true) }}
+</div>
+<table>
+  <thead><tr><th>Route</th><th>Hosts</th><th>Cost</th><th>Detection Risk</th><th>Weighted Score</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Baseline</td>
+      <td class="mono">{{ attack_paths.baseline.hosts | join(' &rarr; ') }}</td>
+      <td class="mono">{{ '%.2f'|format(attack_paths.baseline.operational_cost) }}</td>
+      <td class="mono">{{ '%.2f'|format(attack_paths.baseline.detection_risk) }}</td>
+      <td class="mono"><strong>{{ '%.2f'|format(attack_paths.baseline.weighted_score) }}</strong></td>
+    </tr>
+    {% if attack_paths.adaptive %}
+    <tr>
+      <td>Adaptive {% if attack_paths.route_changed %}<span class="pill partial">route changed</span>{% endif %}</td>
+      <td class="mono">{{ attack_paths.adaptive.hosts | join(' &rarr; ') }}</td>
+      <td class="mono">{{ '%.2f'|format(attack_paths.adaptive.operational_cost) }}</td>
+      <td class="mono">{{ '%.2f'|format(attack_paths.adaptive.detection_risk) }}</td>
+      <td class="mono"><strong>{{ '%.2f'|format(attack_paths.adaptive.weighted_score) }}</strong></td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% if attack_paths.feedback %}
+<p class="sub">
+  <strong>Simulated feedback:</strong> host <code>{{ attack_paths.feedback.host | default('&mdash;', true) }}</code>
+  &middot; confidence {{ '%.0f'|format(attack_paths.feedback.confidence * 100) }}%
+  &middot; severity {{ attack_paths.feedback.severity }}
+  &middot; {{ attack_paths.feedback.note }}
+</p>
+{% endif %}
+{% endif %}
+
+{% if incidents and incidents.alert_count is defined %}
+<h2>Defensive Incident Reconstruction</h2>
+<div class="grid">
+  <div class="card"><div class="label">Alerts</div><div class="value">{{ incidents.alert_count }}</div></div>
+  <div class="card"><div class="label">Incidents</div><div class="value">{{ incidents.incident_count }}</div></div>
+  <div class="card"><div class="label">Alert Compression</div><div class="value">{{ '%.2f'|format(incidents.compression_ratio) }}<span class="sub">:1</span></div></div>
+</div>
+{% if incidents.incidents %}
+<h3 style="margin-top:26px; font-size:15px; color:var(--muted)">Top Incidents &mdash; Operational Ranking</h3>
+<table>
+  <thead><tr><th>Incident</th><th>Alerts</th><th>Risk</th><th>Confidence</th><th>Tactic Progression</th></tr></thead>
+  <tbody>
+  {% for incident in incidents.incidents[:8] %}
+    <tr>
+      <td class="mono">{{ incident.incident_id }}</td>
+      <td class="mono">{{ incident.alert_count }}</td>
+      <td class="mono"><strong>{{ '%.1f'|format(incident.risk_score) }}</strong></td>
+      <td class="mono">{{ '%.0f'|format(incident.confidence * 100) }}%</td>
+      <td class="sub">{{ incident.tactic_progression | map(attribute='tactic') | join(' &rarr; ') or '&mdash;' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h3 style="margin-top:26px; font-size:15px; color:var(--muted)">Evaluation Purity &mdash; Ground Truth Only</h3>
+<div class="note">
+  Purity is reported separately for evaluation. Ground truth does not participate in incident construction, risk, confidence, or ordering.
+</div>
+<table>
+  <thead><tr><th>Incident</th><th>Alert Purity</th><th>Event Purity</th></tr></thead>
+  <tbody>
+  {% for incident in incidents.incidents[:8] %}
+    <tr>
+      <td class="mono">{{ incident.incident_id }}</td>
+      <td class="mono">{{ '%.0f'|format(incident.evaluation.alert_purity * 100) }}%</td>
+      <td class="mono">{{ '%.0f'|format(incident.evaluation.event_purity * 100) }}%</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
+{% if behavioral and behavioral.protocol %}
+<h2>Behavioral Analytics</h2>
+<div class="note"><strong>Calibration protocol.</strong> {{ behavioral.protocol }}</div>
+<div class="grid">
+  <div class="card"><div class="label">Calibration Events</div><div class="value">{{ behavioral.calibration_events }}</div></div>
+  <div class="card"><div class="label">Evaluation Events</div><div class="value">{{ behavioral.evaluation_events }}</div></div>
+  <div class="card"><div class="label">Measured Precision</div><div class="value">{{ '%.0f'|format(behavioral.precision * 100) }}%</div></div>
+  <div class="card"><div class="label">Measured Recall</div><div class="value">{{ '%.0f'|format(behavioral.event_recall * 100) }}%</div></div>
+  <div class="card"><div class="label">TP / FP</div><div class="value">{{ behavioral.true_positive_events }}<span class="sub"> / {{ behavioral.false_positive_events }}</span></div></div>
+</div>
+{% if behavioral.top_findings %}
+<h3 style="margin-top:26px; font-size:15px; color:var(--muted)">Top Behavioral Findings</h3>
+<table>
+  <thead><tr><th>Entity</th><th>Feature</th><th>Score</th><th>Samples</th><th>Ground Truth</th><th>Technique</th></tr></thead>
+  <tbody>
+  {% for finding in behavioral.top_findings[:12] %}
+    <tr>
+      <td class="mono">{{ finding.entity }}</td>
+      <td>{{ finding.feature }}</td>
+      <td class="mono"><strong>{{ '%.2f'|format(finding.score) }}</strong></td>
+      <td class="mono">{{ finding.sample_count }}</td>
+      <td><span class="pill {{ 'tp' if finding.ground_truth == 'attack' else 'fp' }}">{{ finding.ground_truth }}</span></td>
+      <td class="mono sub">{{ finding.technique_id or '&mdash;' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
+{% if proposed_rules %}
+<h2>AI-Drafted Detections</h2>
+<div class="note">
+  Generated for the coverage gaps above, then validated against the same telemetry.
+  Every draft ships <strong>disabled</strong>: a candidate that survives automated
+  checks still needs an engineer to confirm it holds against production data.
+  Drafts that fired on benign events were rejected outright rather than shipped
+  with a caveat.
+</div>
+<table>
+  <thead><tr><th>Rule</th><th>Technique</th><th>Severity</th><th>Condition</th></tr></thead>
+  <tbody>
+  {% for r in proposed_rules %}
+    <tr>
+      <td class="mono">{{ r.rule_id }}</td>
+      <td class="mono">{{ r.techniques | map(attribute='technique_id') | join(', ') }}</td>
+      <td><span class="pill {{ r.severity }}">{{ r.severity }}</span></td>
+      <td class="mono sub">{{ r.condition }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if rejected_proposals %}
+<h2>Rejected Drafts</h2>
+<table>
+  <thead><tr><th>Technique</th><th>Reason for Rejection</th></tr></thead>
+  <tbody>
+  {% for r in rejected_proposals %}
+    <tr><td class="mono">{{ r.technique_id }}</td><td class="sub">{{ r.reason }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if improvement %}
+<h2>Effect of AI-Drafted Rules</h2>
+<table>
+  <thead><tr><th>Evaluation</th><th>Recall</th><th>Precision</th><th>F1</th><th>Grade</th><th>Techniques</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Baseline rules</td>
+      <td>{{ '%.0f'|format(improvement.baseline.technique_recall * 100) }}%</td>
+      <td>{{ '%.0f'|format(improvement.baseline.precision * 100) }}%</td>
+      <td class="mono">{{ '%.2f'|format(improvement.baseline.f1_score) }}</td>
+      <td><span class="grade-{{ improvement.baseline.grade }}">{{ improvement.baseline.grade }}</span></td>
+      <td class="mono">{{ improvement.baseline.techniques_detected }}/{{ improvement.baseline.techniques_total }}</td>
+    </tr>
+    <tr>
+      <td>+ AI rules <span class="sub">(in-sample)</span></td>
+      <td>{{ '%.0f'|format(improvement.with_ai_rules.technique_recall * 100) }}%</td>
+      <td>{{ '%.0f'|format(improvement.with_ai_rules.precision * 100) }}%</td>
+      <td class="mono">{{ '%.2f'|format(improvement.with_ai_rules.f1_score) }}</td>
+      <td><span class="grade-{{ improvement.with_ai_rules.grade }}">{{ improvement.with_ai_rules.grade }}</span></td>
+      <td class="mono">{{ improvement.with_ai_rules.techniques_detected }}/{{ improvement.with_ai_rules.techniques_total }}</td>
+    </tr>
+    {% if improvement.holdout %}
+    <tr>
+      <td><strong>+ AI rules <span class="sub">(holdout)</span></strong></td>
+      <td>{{ '%.0f'|format(improvement.holdout.with_ai_rules.technique_recall * 100) }}%</td>
+      <td>{{ '%.0f'|format(improvement.holdout.with_ai_rules.precision * 100) }}%</td>
+      <td class="mono">{{ '%.2f'|format(improvement.holdout.with_ai_rules.f1_score) }}</td>
+      <td><span class="grade-{{ improvement.holdout.with_ai_rules.grade }}">{{ improvement.holdout.with_ai_rules.grade }}</span></td>
+      <td class="mono">{{ improvement.holdout.with_ai_rules.techniques_detected }}/{{ improvement.holdout.with_ai_rules.techniques_total }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+{% if improvement.holdout %}
+<div class="note">
+  <strong>Why there are two numbers.</strong> The in-sample row is optimistic by
+  construction &mdash; those rules were drafted from that exact telemetry, so recovering
+  the gap is nearly guaranteed and proves little. The holdout row re-emits every scenario
+  under seed <code>{{ improvement.holdout.seed }}</code> with fresh benign noise and new
+  attacker infrastructure (different C2 addresses, domains, victim hosts), so a rule that
+  memorised a literal value fails there.
+  <br><br>
+  <span class="good"><strong>{{ improvement.holdout.delta.techniques_recovered }}</strong>
+  technique(s) recovered and generalised.</span>
+  {% if improvement.holdout.overfit_count %}
+  <span class="bad"><strong>{{ improvement.holdout.overfit_count }}</strong> overfit to the
+  training telemetry: <code>{{ improvement.holdout.in_sample_only | join(', ') }}</code> &mdash;
+  detected in-sample, missed on holdout.</span>
+  {% else %}
+  <span class="good">No overfitting detected.</span>
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if stability.metrics %}
+<h2>Metric Stability</h2>
+<div class="note">
+  A single run reports a point estimate. Benign noise, attacker infrastructure and
+  event ordering all vary with the seed, so quoting one run's precision to three
+  decimals implies confidence the measurement does not support. These figures come
+  from <strong>{{ stability.runs }} independent runs</strong> with
+  {{ (stability.metrics.precision.confidence * 100) | round | int }}% bootstrap
+  confidence intervals. A rule-set change is only an improvement when the intervals
+  separate; otherwise it is seed noise.
+</div>
+<table>
+  <thead>
+    <tr><th>Metric</th><th>Mean</th><th>Confidence Interval</th><th>Min &ndash; Max</th><th>Std Dev</th><th>Stability</th></tr>
+  </thead>
+  <tbody>
+  {% for name, d in stability.metrics.items() %}
+    <tr>
+      <td>{{ name.replace('_', ' ') }}</td>
+      <td class="mono"><strong>{{ '%.3f'|format(d.mean) }}</strong></td>
+      <td class="mono">[{{ '%.3f'|format(d.ci_low) }}, {{ '%.3f'|format(d.ci_high) }}]</td>
+      <td class="mono sub">{{ '%.3f'|format(d.min) }} &ndash; {{ '%.3f'|format(d.max) }}</td>
+      <td class="mono sub">{{ '%.3f'|format(d.stdev) }}</td>
+      <td>
+        <span class="pill {{ 'full' if d.stability == 'stable' else ('partial' if d.stability == 'moderate' else 'none') }}">
+          {{ d.stability }}
+        </span>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p class="sub">
+  Modal grade <strong>{{ stability.modal_grade }}</strong> &middot; distribution:
+  {% for g, n in stability.grade_distribution.items() %}{{ g }}&times;{{ n }}{% if not loop.last %}, {% endif %}{% endfor %}
+</p>
+
+{% if stability.grade_distribution | length > 1 %}
+<div class="note">
+  <strong class="warn">The letter grade is not stable across seeds.</strong>
+  It varies with where benign noise happens to fall, so any single run's grade is
+  partly luck. The interval, not the letter, is the citable result.
+</div>
+{% endif %}
+
+{% if stability.flaky_techniques %}
+<div class="note">
+  <strong class="warn">Intermittently detected techniques.</strong>
+  Detected in some runs and missed in others. This is the most actionable finding
+  in the report: a technique caught 60% of the time is not covered, it is covered
+  by accident. A single run reports it as a clean pass or a clean gap and hides
+  the coin flip entirely.
+  <table style="margin-top:10px">
+    <thead><tr><th>Technique</th><th>Detection Rate</th></tr></thead>
+    <tbody>
+    {% for technique, rate in stability.flaky_techniques.items() %}
+      <tr><td class="mono">{{ technique }}</td><td class="warn">{{ '%.0f'|format(rate * 100) }}% of runs</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if robustness.cases_tested %}
+<h2>Adversarial Robustness</h2>
+<div class="grid">
+  <div class="card">
+    <div class="label">Robustness Score</div>
+    <div class="value {{ 'good' if robustness.robustness_score >= 0.9 else ('warn' if robustness.robustness_score >= 0.75 else 'bad') }}">
+      {{ '%.0f'|format(robustness.robustness_score * 100) }}%
+    </div>
+  </div>
+  <div class="card">
+    <div class="label">Cases Tested</div>
+    <div class="value">{{ robustness.cases_tested }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Evasions Found</div>
+    <div class="value {{ 'bad' if robustness.evasions_found else 'good' }}">{{ robustness.evasions_found }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Fragile Rules</div>
+    <div class="value {{ 'bad' if robustness.fragile_rules else 'good' }}">{{ robustness.fragile_rules | length }}</div>
+  </div>
+</div>
+<div class="note">
+  Attack telemetry is mutated using transformations real operators apply routinely:
+  case flipping, inserted quote pairs (<code>de""lete</code>), cmd.exe escape carets
+  (<code>delete^ shadows</code>), flag abbreviation and whitespace padding.
+  <strong>None of them change what the command does</strong>, so a rule detecting the
+  behaviour should still fire. One that stops firing was matching the spelling of the
+  technique, not the technique. A rule that fails against low-effort evasion is not
+  a control worth reporting as coverage.
+</div>
+
+{% if robustness.fragile_rules %}
+<table>
+  <thead><tr><th>Rule</th><th>Survival Rate</th><th>Defeated By</th></tr></thead>
+  <tbody>
+  {% for rule_id, mutations in robustness.fragile_rules.items() %}
+    {% set survival = robustness.rule_robustness.get(rule_id, 0) %}
+    <tr>
+      <td class="mono">{{ rule_id }}</td>
+      <td class="{{ 'good' if survival >= 0.9 else ('warn' if survival >= 0.7 else 'bad') }}">
+        {{ '%.0f'|format(survival * 100) }}%
+      </td>
+      <td class="sub">{{ mutations | join(', ') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="good">No rule was defeated by behaviour-preserving mutation.</p>
+{% endif %}
+
+{% if robustness.name_dependent_rules %}
+<div class="note">
+  <strong>Name-dependent rules:</strong>
+  <code>{{ robustness.name_dependent_rules | join(', ') }}</code> stop firing when the
+  binary is renamed. Reported separately and excluded from the score, because matching
+  on tool name is sometimes a deliberate trade-off rather than a defect.
+</div>
+{% endif %}
+{% endif %}
+
+{% if compliance.frameworks %}
+<h2>Control Effectiveness</h2>
+<div class="note">
+  {{ compliance.scope_note }}
+</div>
+<div class="grid">
+  {% for framework, data in compliance.frameworks.items() %}
+  <div class="card">
+    <div class="label">{{ framework }}</div>
+    <div class="value {{ 'good' if data.weighted_coverage >= 0.8 else ('warn' if data.weighted_coverage >= 0.5 else 'bad') }}">
+      {{ '%.0f'|format(data.weighted_coverage * 100) }}%
+    </div>
+    <div class="sub">
+      {{ data.effective }} effective &middot; {{ data.partially_effective }} partial
+      &middot; {{ data.ineffective }} ineffective
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% for framework, data in compliance.frameworks.items() %}
+<h3 style="margin-top:26px; font-size:15px; color:var(--muted)">{{ framework }}</h3>
+<table>
+  <thead>
+    <tr><th>Control</th><th>Title</th><th>Status</th><th>Coverage</th><th>Techniques Not Detected</th></tr>
+  </thead>
+  <tbody>
+  {% for c in data.controls %}
+    <tr>
+      <td class="mono">{{ c.control_id }}</td>
+      <td>{{ c.title }}</td>
+      <td>
+        <span class="pill {{ {'effective': 'full', 'partially_effective': 'partial', 'ineffective': 'none', 'not_assessed': 'info'}[c.status] }}">
+          {{ c.status.replace('_', ' ') }}
+        </span>
+      </td>
+      <td class="mono">{% if c.status != 'not_assessed' %}{{ '%.0f'|format(c.coverage * 100) }}%{% else %}&mdash;{% endif %}</td>
+      <td class="mono sub">{{ c.techniques_not_detected | join(', ') or '&mdash;' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="sub">
+  Weighted coverage <strong>{{ '%.0f'|format(data.weighted_coverage * 100) }}%</strong>
+  across {{ data.assessed_controls }} assessed controls (partial credit counted at half).
+</p>
+{% endfor %}
+{% endif %}
+
+<h2>Scenarios Executed</h2>
+<table>
+  <thead><tr><th>ID</th><th>Scenario</th><th>Events</th><th>Malicious</th><th>Alerts</th><th>Missed Techniques</th></tr></thead>
+  <tbody>
+  {% for s in scenarios %}
+    <tr>
+      <td class="mono">{{ s.scenario_id }}</td>
+      <td>{{ s.scenario_name }}</td>
+      <td class="mono">{{ s.event_count }}</td>
+      <td class="mono">{{ s.malicious_event_count }}</td>
+      <td class="mono">{{ s.alert_count }}</td>
+      <td class="mono sub">{{ s.missed_techniques | join(', ') or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<footer>
+  Generated by PurpleForge. Telemetry is synthetic: scenarios declare the events a
+  technique would produce rather than executing attacker code, which is what makes
+  these runs safe to execute anywhere and reproducible from a seed.
+</footer>
+
+</div>
+</body>
+</html>

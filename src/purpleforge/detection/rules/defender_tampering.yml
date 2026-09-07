@@ -1,0 +1,35 @@
+id: PF-R-0004
+title: Microsoft Defender Tampering via PowerShell
+description: >
+  Detects Defender being weakened through Set-MpPreference or Add-MpPreference:
+  real-time monitoring disabled, or broad path and extension exclusions added.
+  Exclusion abuse is the quieter half and is frequently the earliest reliable
+  indicator in a human-operated ransomware intrusion.
+level: high
+source: handwritten
+tags:
+  - attack.defense-evasion
+  - attack.t1562.001
+references:
+  - https://attack.mitre.org/techniques/T1562/001/
+
+detection:
+  selection_disable:
+    process.command_line|contains:
+      - "DisableRealtimeMonitoring $true"
+      - "DisableIOAVProtection $true"
+      - "DisableBehaviorMonitoring $true"
+      - "MpPreference -DisableScriptScanning $true"
+  selection_exclusion:
+    process.command_line|contains: "Add-MpPreference"
+  selection_exclusion_target:
+    process.command_line|contains:
+      - "-ExclusionPath"
+      - "-ExclusionExtension"
+      - "-ExclusionProcess"
+
+condition: selection_disable or (selection_exclusion and selection_exclusion_target)
+
+falsepositives:
+  - Security team temporarily disabling protection for approved software testing
+  - Antivirus migration scripts adding exclusions for a replacement product

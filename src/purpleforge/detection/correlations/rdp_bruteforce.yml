@@ -1,0 +1,28 @@
+id: PF-C-0003
+title: RDP Authentication Brute Force
+description: >
+  Detects repeated failed RDP logons against one host inside a short window. A
+  single failed logon is meaningless -- users mistype passwords constantly -- so
+  volume is the only usable signal here. A threshold rule expresses that; a
+  single-event rule cannot express it at all.
+level: medium
+source: handwritten
+tags:
+  - attack.credential-access
+  - attack.t1110.001
+references:
+  - https://attack.mitre.org/techniques/T1110/001/
+
+correlation:
+  type: threshold
+  window_seconds: 300
+  group_by: host
+  threshold: 5
+  selection:
+    event_type: authentication
+    winlog.event_id: 4625
+    winlog.logon_type: 10
+
+falsepositives:
+  - Expired service account credentials retrying on a schedule
+  - Misconfigured RDP client caching a stale password

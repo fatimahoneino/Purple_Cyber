@@ -1,0 +1,38 @@
+id: PF-R-0007
+title: Office Application Spawning Script Interpreter
+description: >
+  Detects an Office process spawning a shell or script host, the classic macro
+  execution signal. Office has almost no legitimate reason to launch PowerShell
+  or cmd, which makes this one of the highest-value analytics available for
+  catching phishing at the execution stage rather than after C2 is established.
+level: high
+source: handwritten
+tags:
+  - attack.execution
+  - attack.t1059.001
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+
+detection:
+  selection_parent:
+    process.parent_name|endswith:
+      - "WINWORD.EXE"
+      - "EXCEL.EXE"
+      - "POWERPNT.EXE"
+      - "OUTLOOK.EXE"
+      - "MSACCESS.EXE"
+  selection_child:
+    process.name|endswith:
+      - "powershell.exe"
+      - "pwsh.exe"
+      - "cmd.exe"
+      - "wscript.exe"
+      - "cscript.exe"
+      - "mshta.exe"
+      - "regsvr32.exe"
+      - "rundll32.exe"
+
+condition: selection_parent and selection_child
+
+falsepositives:
+  - Sanctioned Office add-ins that shell out to helper scripts

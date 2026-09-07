@@ -1,0 +1,159 @@
+scenario_id: PF-RANSOM-01
+name: LockBit-style Human-Operated Ransomware
+description: >
+  Emulates a hands-on-keyboard ransomware intrusion from exposed RDP through to
+  encryption. Included alongside the APT29 chain because the detection economics
+  are inverted: the destructive stages are trivially detectable but far too late
+  to matter, so this scenario is really a test of whether analytics fire during
+  the quiet preparation window -- defence evasion, shadow copy deletion and
+  lateral movement.
+threat_actor: LockBit affiliate (financially motivated)
+references:
+  - https://attack.mitre.org/software/S0372/
+  - https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-165a
+
+steps:
+  - step_id: initial-access
+    technique_id: T1133
+    technique_name: External Remote Services
+    tactic: initial-access
+    description: Valid RDP credentials bought from an access broker, used off-hours.
+    delay_seconds: 50
+    telemetry:
+      - source: windows_security
+        event_type: authentication
+        host: "SRV-RDP-01"
+        user: "svc_helpdesk"
+        winlog.event_id: 4624
+        winlog.logon_type: 10
+        source.ip: "45.227.255.190"
+        source.geo_country: "RU"
+        auth.result: "success"
+      - source: windows_security
+        event_type: authentication
+        host: "SRV-RDP-01"
+        user: "administrator"
+        winlog.event_id: 4625
+        winlog.logon_type: 10
+        source.ip: "45.227.255.190"
+        auth.result: "failure"
+        auth.failure_reason: "0xC000006A"
+
+  - step_id: defense-evasion
+    technique_id: T1562.001
+    technique_name: Disable or Modify Tools
+    tactic: defense-evasion
+    description: Defender real-time protection disabled and exclusions added.
+    delay_seconds: 30
+    telemetry:
+      - source: sysmon
+        event_type: process_creation
+        host: "SRV-RDP-01"
+        user: "svc_helpdesk"
+        process.name: "powershell.exe"
+        process.command_line: "powershell.exe Set-MpPreference -DisableRealtimeMonitoring $true -DisableIOAVProtection $true"
+        process.parent_name: "cmd.exe"
+        process.integrity_level: "High"
+      - source: sysmon
+        event_type: process_creation
+        host: "SRV-RDP-01"
+        user: "svc_helpdesk"
+        process.name: "powershell.exe"
+        process.command_line: 'powershell.exe Add-MpPreference -ExclusionPath "C:\Windows\Temp" -ExclusionExtension ".exe"'
+        process.parent_name: "cmd.exe"
+        process.integrity_level: "High"
+
+  - step_id: discovery
+    technique_id: T1046
+    technique_name: Network Service Discovery
+    tactic: discovery
+    description: SMB sweep across the server VLAN to map encryption targets.
+    delay_seconds: 45
+    telemetry:
+      - source: zeek
+        event_type: network_scan
+        host: "SRV-RDP-01"
+        user: "svc_helpdesk"
+        process.name: "advanced_ip_scanner.exe"
+        network.unique_destinations: 254
+        destination.port: 445
+        network.scan_duration_seconds: 38
+
+  - step_id: lateral-movement
+    technique_id: T1021.002
+    technique_name: SMB/Windows Admin Shares
+    tactic: lateral-movement
+    description: PsExec pushes the payload to file and database servers.
+    delay_seconds: 40
+    telemetry:
+      - source: sysmon
+        event_type: process_creation
+        host: "SRV-RDP-01"
+        user: "svc_helpdesk"
+        process.name: "PsExec64.exe"
+        process.command_line: 'PsExec64.exe \\SRV-FILE-01 -u corp\administrator -p ***** -c -f -h C:\Windows\Temp\lb3.exe'
+        process.parent_name: "cmd.exe"
+        process.integrity_level: "High"
+      - source: windows_security
+        event_type: file_share_access
+        host: "SRV-FILE-01"
+        user: "administrator"
+        winlog.event_id: 5145
+        file.share_name: "\\\\*\\ADMIN$"
+        source.ip: "10.20.0.31"
+
+  - step_id: impact-inhibit-recovery
+    technique_id: T1490
+    technique_name: Inhibit System Recovery
+    tactic: impact
+    description: Shadow copies and the recovery environment are destroyed.
+    delay_seconds: 15
+    telemetry:
+      - source: sysmon
+        event_type: process_creation
+        host: "SRV-FILE-01"
+        user: "administrator"
+        process.name: "vssadmin.exe"
+        process.command_line: "vssadmin.exe delete shadows /all /quiet"
+        process.parent_name: "lb3.exe"
+        process.integrity_level: "System"
+      - source: sysmon
+        event_type: process_creation
+        host: "SRV-FILE-01"
+        user: "administrator"
+        process.name: "bcdedit.exe"
+        process.command_line: "bcdedit.exe /set {default} recoveryenabled No"
+        process.parent_name: "lb3.exe"
+        process.integrity_level: "System"
+      - source: sysmon
+        event_type: process_creation
+        host: "SRV-FILE-01"
+        user: "administrator"
+        process.name: "wbadmin.exe"
+        process.command_line: "wbadmin.exe delete catalog -quiet"
+        process.parent_name: "lb3.exe"
+        process.integrity_level: "System"
+
+  - step_id: impact-encryption
+    technique_id: T1486
+    technique_name: Data Encrypted for Impact
+    tactic: impact
+    description: Mass file encryption with ransom note dropped per directory.
+    delay_seconds: 10
+    telemetry:
+      - source: edr
+        event_type: file_modification_burst
+        host: "SRV-FILE-01"
+        user: "administrator"
+        process.name: "lb3.exe"
+        file.modified_count: 18422
+        file.extension_added: ".lockbit3"
+        file.entropy_avg: 7.98
+        time.window_seconds: 90
+      - source: sysmon
+        event_type: file_create
+        host: "SRV-FILE-01"
+        user: "administrator"
+        process.name: "lb3.exe"
+        file.path: 'D:\Shares\Finance\!!!-RESTORE-MY-FILES-!!!.txt'
+        file.size: 1893

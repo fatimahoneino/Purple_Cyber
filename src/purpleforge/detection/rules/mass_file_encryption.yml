@@ -1,0 +1,30 @@
+id: PF-R-0009
+title: Mass File Modification Consistent with Encryption
+description: >
+  Detects a burst of file modifications with high average entropy, the behavioural
+  signature of ransomware encryption. Entropy is the discriminator here: bulk file
+  operations are common, but bulk operations that leave near-random content are
+  not. Fires late in the kill chain by nature, so it is a containment trigger
+  rather than a prevention one.
+level: critical
+source: handwritten
+tags:
+  - attack.impact
+  - attack.t1486
+references:
+  - https://attack.mitre.org/techniques/T1486/
+
+detection:
+  selection_burst:
+    event_type: "file_modification_burst"
+    file.modified_count|gte: 500
+    file.entropy_avg|gte: 7.5
+  selection_ransom_note:
+    event_type: "file_create"
+    file.path|re: "(restore|recover|readme|how[_-]?to[_-]?decrypt).*\\.(txt|hta|html)$"
+
+condition: selection_burst or selection_ransom_note
+
+falsepositives:
+  - Legitimate bulk compression or full-disk encryption rollout
+  - Backup restore operations rewriting large directory trees

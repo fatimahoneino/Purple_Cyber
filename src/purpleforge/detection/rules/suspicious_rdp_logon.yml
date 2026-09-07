@@ -1,0 +1,28 @@
+id: PF-R-0010
+title: Interactive RDP Logon from External Address
+description: >
+  Detects successful RDP logons (logon type 10) sourced from outside RFC1918
+  space. Internet-exposed RDP remains one of the most common ransomware entry
+  points, and a successful external RDP authentication is worth a look even when
+  the credentials are valid -- validity is the point when the access was bought.
+level: high
+source: handwritten
+tags:
+  - attack.initial-access
+  - attack.t1133
+references:
+  - https://attack.mitre.org/techniques/T1133/
+
+detection:
+  selection_rdp_success:
+    event_type: "authentication"
+    winlog.event_id: 4624
+    winlog.logon_type: 10
+  filter_internal:
+    source.ip|re: "^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|127\\.)"
+
+condition: selection_rdp_success and not filter_internal
+
+falsepositives:
+  - Administrators connecting from home without going through the VPN
+  - Third-party support vendors with sanctioned direct RDP access

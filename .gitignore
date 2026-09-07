@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# PurpleForge output artifacts
+out/
+*.html
+!src/purpleforge/reporting/templates/*.html
+
+# Secrets. The AI layer reads OPENAI_API_KEY from the environment; never commit it.
+.env
+.env.*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
